@@ -21,18 +21,21 @@ import json
 import matplotlib.pyplot as plt
 import shutil
 
-
 plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei'] # 微軟正黑體
 plt.rcParams['axes.unicode_minus'] = False  # 解決負號亂碼
 
+# === .env & Token 初始化 ===
 load_dotenv()
 token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 serper_api_key = os.getenv("SERPER_API_KEY")
 openai_api_key = os.getenv("OPENAI_API_KEY")
 
 def login_hf(token):
-    login(token=token)
-    return True
+    try:
+        login(token=token)
+    except Exception as e:
+        st.error(f"Hugging Face Token 登入失敗：{e}")
+        st.stop()
 
 if not token:
     st.error("請設定 HUGGINGFACEHUB_API_TOKEN")
@@ -40,7 +43,12 @@ if not token:
 if not openai_api_key:
     st.error("請設定 OPENAI_API_KEY")
     st.stop()
-login_hf(token)
+
+# 只在 Session 第一次 login
+if "hf_logged_in" not in st.session_state:
+    login_hf(token)
+    st.session_state["hf_logged_in"] = True
+
 openai.api_key = openai_api_key
 
 # 路徑初始化
@@ -49,7 +57,6 @@ VECTOR_DIR = os.path.join(BASE_DIR, "vectorstore")
 os.makedirs(VECTOR_DIR, exist_ok=True)
 DATA_DIR = os.path.join(BASE_DIR, "data")
 os.makedirs(DATA_DIR, exist_ok=True)
-
 
 MAPPING_PATH = os.path.join(BASE_DIR, "company_mapping.json")
 
@@ -101,8 +108,6 @@ def ask_openai(prompt, model="gpt-4o", temperature=0.7, lang="繁體中文", his
         max_tokens=1000
     )
     return completion.choices[0].message.content.strip()
-
-
 
 
 def get_cached_summary_path(company):
