@@ -1,0 +1,9 @@
+2025-07-21 15:36:28,758 [INFO] 🔍 TSMC：./data/TSMC 2024Q1.pdf
+2025-07-21 15:36:28,759 [INFO] 未偵測到自定義關鍵字，使用預設
+2025-07-21 15:37:02,656 [INFO] Load pretrained SentenceTransformer: sentence-transformers/all-MiniLM-L6-v2
+2025-07-21 15:37:13,783 [INFO] Loading faiss with AVX2 support.
+2025-07-21 15:37:13,804 [INFO] Successfully loaded faiss with AVX2 support.
+2025-07-21 15:37:13,809 [INFO] Failed to load GPU Faiss: name 'GpuIndexIVFFlat' is not defined. Will not load constructor refs for GPU indexes. This is only an error if you're trying to use GPU Faiss.
+2025-07-21 15:37:13,824 [INFO] ✅ 向量庫+分段metadata已存：C:\financial_chatbot\vectorstore\TSMC\db_faiss
+2025-07-21 15:37:13,825 [INFO] 🏁 TSMC 完成向量庫與資料建置
+2025-07-21 15:37:13,825 [INFO] 🏁 全部處理完成，用時 45.07 秒

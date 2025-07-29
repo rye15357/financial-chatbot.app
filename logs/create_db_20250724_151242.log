@@ -1,0 +1,9 @@
+2025-07-24 15:12:42,287 [INFO] 🔍 NewC：data\NewC.pdf
+2025-07-24 15:12:42,289 [INFO] 未偵測到自定義關鍵字，使用預設
+2025-07-24 15:13:12,409 [INFO] Load pretrained SentenceTransformer: sentence-transformers/all-MiniLM-L6-v2
+2025-07-24 15:13:21,592 [INFO] Loading faiss with AVX2 support.
+2025-07-24 15:13:21,615 [INFO] Successfully loaded faiss with AVX2 support.
+2025-07-24 15:13:21,621 [INFO] Failed to load GPU Faiss: name 'GpuIndexIVFFlat' is not defined. Will not load constructor refs for GPU indexes. This is only an error if you're trying to use GPU Faiss.
+2025-07-24 15:13:21,634 [INFO] ✅ 向量庫+分段metadata已存：C:\financial_chatbot\vectorstore\NewC\db_faiss
+2025-07-24 15:13:21,635 [INFO] 🏁 NewC 完成向量庫與資料建置
+2025-07-24 15:13:21,636 [INFO] 🏁 全部處理完成，用時 39.35 秒

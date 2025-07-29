@@ -1,0 +1,11 @@
+2025-07-29 02:29:12,972 [INFO] 鴻海: data\___23bc3472_20250729_022911.pdf
+2025-07-29 02:29:12,972 [INFO] 未偵測到自定義關鍵字，使用預設
+2025-07-29 02:29:37,265 [INFO] 公司原始名: 鴻海 | 資料夾安全名: ___23bc3472
+2025-07-29 02:29:44,254 [INFO] Load pretrained SentenceTransformer: sentence-transformers/all-MiniLM-L6-v2
+2025-07-29 02:29:53,563 [INFO] Loading faiss with AVX2 support.
+2025-07-29 02:29:53,588 [INFO] Successfully loaded faiss with AVX2 support.
+2025-07-29 02:29:53,595 [INFO] Failed to load GPU Faiss: name 'GpuIndexIVFFlat' is not defined. Will not load constructor refs for GPU indexes. This is only an error if you're trying to use GPU Faiss.
+2025-07-29 02:29:53,611 [INFO] ✅ 向量庫+分段metadata已存：C:\financial_chatbot\vectorstore\___23bc3472\db_faiss
+2025-07-29 02:29:53,613 [INFO] ✅ company_mapping.json 更新成功: ___23bc3472 → 鴻海
+2025-07-29 02:29:53,614 [INFO] 🏁 鴻海 完成向量庫與資料建置
+2025-07-29 02:29:53,614 [INFO] 🏁 全部處理完成，用時 40.64 秒

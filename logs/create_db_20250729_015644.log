@@ -1,0 +1,11 @@
+2025-07-29 01:56:44,351 [INFO] ____b6783829: data\____b6783829_20250729_015643.pdf
+2025-07-29 01:56:44,351 [INFO] 未偵測到自定義關鍵字，使用預設
+2025-07-29 01:57:12,437 [INFO] 公司原始名: ____b6783829 | 資料夾安全名: ____b6783829_04ace041
+2025-07-29 01:57:19,508 [INFO] Load pretrained SentenceTransformer: sentence-transformers/all-MiniLM-L6-v2
+2025-07-29 01:57:31,905 [INFO] Loading faiss with AVX2 support.
+2025-07-29 01:57:31,927 [INFO] Successfully loaded faiss with AVX2 support.
+2025-07-29 01:57:31,933 [INFO] Failed to load GPU Faiss: name 'GpuIndexIVFFlat' is not defined. Will not load constructor refs for GPU indexes. This is only an error if you're trying to use GPU Faiss.
+2025-07-29 01:57:31,957 [INFO] ✅ 向量庫+分段metadata已存：C:\financial_chatbot\vectorstore\____b6783829_04ace041\db_faiss
+2025-07-29 01:57:31,959 [INFO] ✅ company_mapping.json 更新成功: ____b6783829_04ace041 → ____b6783829
+2025-07-29 01:57:31,959 [INFO] 🏁 ____b6783829 完成向量庫與資料建置
+2025-07-29 01:57:31,960 [INFO] 🏁 全部處理完成，用時 47.61 秒

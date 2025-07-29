@@ -1,0 +1,6 @@
+2025-07-24 14:52:10,666 [INFO] 🔍 聯電：data\聯電.pdf
+2025-07-24 14:52:10,668 [INFO] 未偵測到自定義關鍵字，使用預設
+2025-07-24 14:52:28,339 [INFO] Load pretrained SentenceTransformer: sentence-transformers/all-MiniLM-L6-v2
+2025-07-24 14:52:35,614 [INFO] Loading faiss with AVX2 support.
+2025-07-24 14:52:35,634 [INFO] Successfully loaded faiss with AVX2 support.
+2025-07-24 14:52:35,640 [INFO] Failed to load GPU Faiss: name 'GpuIndexIVFFlat' is not defined. Will not load constructor refs for GPU indexes. This is only an error if you're trying to use GPU Faiss.

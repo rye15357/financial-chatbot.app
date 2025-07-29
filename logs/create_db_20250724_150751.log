@@ -1,0 +1,9 @@
+2025-07-24 15:07:51,278 [INFO] 🔍 HonHai：data/HonHai2025Q1.pdf
+2025-07-24 15:07:51,278 [INFO] 未偵測到自定義關鍵字，使用預設
+2025-07-24 15:08:21,459 [INFO] Load pretrained SentenceTransformer: sentence-transformers/all-MiniLM-L6-v2
+2025-07-24 15:08:30,687 [INFO] Loading faiss with AVX2 support.
+2025-07-24 15:08:30,708 [INFO] Successfully loaded faiss with AVX2 support.
+2025-07-24 15:08:30,713 [INFO] Failed to load GPU Faiss: name 'GpuIndexIVFFlat' is not defined. Will not load constructor refs for GPU indexes. This is only an error if you're trying to use GPU Faiss.
+2025-07-24 15:08:30,726 [INFO] ✅ 向量庫+分段metadata已存：C:\financial_chatbot\vectorstore\HonHai\db_faiss
+2025-07-24 15:08:30,727 [INFO] 🏁 HonHai 完成向量庫與資料建置
+2025-07-24 15:08:30,727 [INFO] 🏁 全部處理完成，用時 39.45 秒

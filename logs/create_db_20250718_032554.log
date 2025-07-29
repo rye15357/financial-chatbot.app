@@ -1,0 +1,21 @@
+2025-07-18 03:25:54,690 [INFO] 🔍 TSMC：./data/TSMC 2024Q1.pdf
+2025-07-18 03:25:54,690 [INFO] 未偵測到自定義關鍵字，使用預設
+2025-07-18 03:25:54,875 [INFO] OCR 擷取頁碼 1
+2025-07-18 03:25:56,675 [INFO] OCR 擷取頁碼 2
+2025-07-18 03:25:59,339 [INFO] OCR 擷取頁碼 3
+2025-07-18 03:26:03,179 [INFO] OCR 擷取頁碼 4
+2025-07-18 03:26:08,929 [INFO] OCR 擷取頁碼 5
+2025-07-18 03:26:11,658 [INFO] OCR 擷取頁碼 6
+2025-07-18 03:26:15,212 [INFO] OCR 擷取頁碼 7
+2025-07-18 03:26:17,079 [INFO] OCR 擷取頁碼 8
+2025-07-18 03:26:24,833 [INFO] OCR 擷取頁碼 9
+2025-07-18 03:26:27,992 [INFO] OCR 擷取頁碼 10
+2025-07-18 03:26:31,298 [INFO] OCR 擷取頁碼 11
+2025-07-18 03:27:06,872 [INFO] Load pretrained SentenceTransformer: sentence-transformers/all-MiniLM-L6-v2
+2025-07-18 03:27:18,530 [INFO] Loading faiss with AVX2 support.
+2025-07-18 03:27:18,552 [INFO] Successfully loaded faiss with AVX2 support.
+2025-07-18 03:27:18,558 [INFO] Failed to load GPU Faiss: name 'GpuIndexIVFFlat' is not defined. Will not load constructor refs for GPU indexes. This is only an error if you're trying to use GPU Faiss.
+2025-07-18 03:27:18,572 [INFO] ✅ 向量庫+分段metadata已存：C:\financial_chatbot\vectorstore\TSMC\db_faiss
+2025-07-18 03:27:18,573 [INFO] ⚡ TSMC 有部分頁面啟用OCR，請檢查預覽檔內容是否正常
+2025-07-18 03:27:18,573 [INFO] 🏁 TSMC 完成向量庫與資料建置
+2025-07-18 03:27:18,573 [INFO] 🏁 全部處理完成，用時 83.88 秒

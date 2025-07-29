@@ -1,0 +1,11 @@
+2025-07-29 02:35:37,174 [INFO] 聯電: data\___60243116_20250729_023535.pdf
+2025-07-29 02:35:37,174 [INFO] 未偵測到自定義關鍵字，使用預設
+2025-07-29 02:35:47,842 [INFO] 公司原始名: 聯電 | 資料夾安全名: ___60243116
+2025-07-29 02:35:54,663 [INFO] Load pretrained SentenceTransformer: sentence-transformers/all-MiniLM-L6-v2
+2025-07-29 02:36:01,798 [INFO] Loading faiss with AVX2 support.
+2025-07-29 02:36:01,821 [INFO] Successfully loaded faiss with AVX2 support.
+2025-07-29 02:36:01,827 [INFO] Failed to load GPU Faiss: name 'GpuIndexIVFFlat' is not defined. Will not load constructor refs for GPU indexes. This is only an error if you're trying to use GPU Faiss.
+2025-07-29 02:36:01,837 [INFO] ✅ 向量庫+分段metadata已存：C:\financial_chatbot\vectorstore\___60243116\db_faiss
+2025-07-29 02:36:01,839 [INFO] ✅ company_mapping.json 更新成功: ___60243116 → 聯電
+2025-07-29 02:36:01,839 [INFO] 🏁 聯電 完成向量庫與資料建置
+2025-07-29 02:36:01,840 [INFO] 🏁 全部處理完成，用時 24.67 秒

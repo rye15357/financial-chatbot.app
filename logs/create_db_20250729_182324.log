@@ -1,0 +1,11 @@
+2025-07-29 18:23:24,807 [INFO] 台達電: data\____aa5c2d63_20250729_182323.pdf
+2025-07-29 18:23:24,807 [INFO] 未偵測到自定義關鍵字，使用預設
+2025-07-29 18:23:40,945 [INFO] 公司原始名: 台達電 | 資料夾安全名: ____aa5c2d63
+2025-07-29 18:23:47,715 [INFO] Load pretrained SentenceTransformer: sentence-transformers/all-MiniLM-L6-v2
+2025-07-29 18:23:55,274 [INFO] Loading faiss with AVX2 support.
+2025-07-29 18:23:55,297 [INFO] Successfully loaded faiss with AVX2 support.
+2025-07-29 18:23:55,307 [INFO] Failed to load GPU Faiss: name 'GpuIndexIVFFlat' is not defined. Will not load constructor refs for GPU indexes. This is only an error if you're trying to use GPU Faiss.
+2025-07-29 18:23:55,321 [INFO] ✅ 向量庫+分段metadata已存：C:\financial_chatbot\vectorstore\____aa5c2d63\db_faiss
+2025-07-29 18:23:55,324 [INFO] ✅ company_mapping.json 更新成功: ____aa5c2d63 → 台達電
+2025-07-29 18:23:55,324 [INFO] 🏁 台達電 完成向量庫與資料建置
+2025-07-29 18:23:55,325 [INFO] 🏁 全部處理完成，用時 30.52 秒

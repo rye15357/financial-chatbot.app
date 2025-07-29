@@ -1,0 +1,10 @@
+2025-07-24 15:01:48,052 [INFO] 🔍 聯電：data/2025Q1_consolidared_report(c)_1747304642.pdf
+2025-07-24 15:01:48,052 [INFO] 未偵測到自定義關鍵字，使用預設
+2025-07-24 15:02:20,195 [INFO] Note: NumExpr detected 16 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+2025-07-24 15:02:20,196 [INFO] NumExpr defaulting to 8 threads.
+2025-07-24 15:02:25,133 [WARNING] From C:\Users\Rye\anaconda3\Lib\site-packages\tf_keras\src\losses.py:2976: The name tf.losses.sparse_softmax_cross_entropy is deprecated. Please use tf.compat.v1.losses.sparse_softmax_cross_entropy instead.
+
+2025-07-24 15:02:25,600 [INFO] Load pretrained SentenceTransformer: sentence-transformers/all-MiniLM-L6-v2
+2025-07-24 15:02:42,446 [INFO] Loading faiss with AVX2 support.
+2025-07-24 15:02:42,816 [INFO] Successfully loaded faiss with AVX2 support.
+2025-07-24 15:02:42,824 [INFO] Failed to load GPU Faiss: name 'GpuIndexIVFFlat' is not defined. Will not load constructor refs for GPU indexes. This is only an error if you're trying to use GPU Faiss.
