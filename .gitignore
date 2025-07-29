@@ -1,0 +1,6 @@
+.env
+data/
+vectorstore/
+logs/
+*.log
+__pycache__/
