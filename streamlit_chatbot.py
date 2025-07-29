@@ -19,14 +19,17 @@ import hashlib
 from lang_pack import LANG_PACK
 import json
 import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
 import shutil
 
-plt.rcParams['font.sans-serif'] = [
-    'Microsoft JhengHei',           # Windows
-    'Noto Sans CJK TC',             # Linux/Google Cloud, 很常見
-    'AR PL UMing TW',               # Ubuntu 也有
-    'sans-serif'                    # 其他預設
-]
+# ====== 中文字型設定（支援本地/雲端）======
+FONT_PATH = os.path.join(os.path.dirname(__file__), "NotoSansTC-Regular.ttf")
+if os.path.exists(FONT_PATH):
+    prop = fm.FontProperties(fname=FONT_PATH)
+    plt.rcParams['font.sans-serif'] = [prop.get_name(), 'sans-serif']
+else:
+    prop = None
+    plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei', 'sans-serif']
 plt.rcParams['axes.unicode_minus'] = False
 
 # === .env & Token 初始化 ===
@@ -984,13 +987,10 @@ with tab2:
                     unsafe_allow_html=True
                 )
 
-# ========== 分頁3：財報圖表 ==========
 with tab3:
     st.title(T["tab3"])
     st.markdown(T["tab3_title"])
     indicator_options = ["營收", "淨利", "EPS", "毛利率"] if multi_lang == "繁體中文" else ["Revenue", "Net Income", "EPS", "Gross Margin"]
-
-    # ...選公司略...
 
     st.subheader(T["tab3_multi_title"])
     selected_companies_display = st.multiselect(
@@ -1014,18 +1014,15 @@ with tab3:
         key="tab3_year_multi"
     )
 
-    # --- 比較/刪除兩顆按鈕同一行 ---
     btn_col1, btn_col2 = st.columns([1, 1])
     with btn_col1:
         compare_btn_clicked = st.button(T["tab3_multi_btn"], key="compare_btn", use_container_width=True)
     with btn_col2:
         delete_btn_clicked = st.button("🗑️", key="delete_chart_btn", use_container_width=True, help="刪除圖表")
 
-    # 存放圖表資料
     if "multi_chart_df" not in st.session_state:
         st.session_state["multi_chart_df"] = None
 
-    # 查詢與刪除動作
     if compare_btn_clicked:
         if not selected_companies:
             st.warning(T["tab3_multi_no_company"])
@@ -1034,19 +1031,31 @@ with tab3:
             with st.spinner(T["tab3_multi_spinner"]):
                 selected_display_names = [company_mapping.get(code, code) for code in selected_companies]
                 years = list(range(year_range[0], year_range[1]+1))
-                df = get_company_year_data(selected_display_names, compare_indicator, years)
-                if not df.empty and "%" not in compare_indicator:
-                    df[compare_indicator] = df[compare_indicator] / 1e8
+                # 這裡用中文欄位查詢
+                indicator_map = {
+                    "Revenue": "營收", "Net Income": "淨利", "EPS": "EPS", "Gross Margin": "毛利率",
+                    "營收": "營收", "淨利": "淨利", "毛利率": "毛利率"
+                }
+                indicator_key = indicator_map.get(compare_indicator, compare_indicator)
+                df = get_company_year_data(selected_display_names, indicator_key, years)
+                # 如果不是百分比再除以 1e8
+                if not df.empty and "%" not in indicator_key:
+                    df[indicator_key] = df[indicator_key] / 1e8
                 st.session_state["multi_chart_df"] = df
 
     if delete_btn_clicked:
         st.session_state["multi_chart_df"] = None
 
     df = st.session_state.get("multi_chart_df", None)
-    # 圖表與寬高滑條同一行（只有查詢過才出現）
     if df is not None and not df.empty:
+        # 這裡 indicator_key 也要用
+        indicator_map = {
+            "Revenue": "營收", "Net Income": "淨利", "EPS": "EPS", "Gross Margin": "毛利率",
+            "營收": "營收", "淨利": "淨利", "毛利率": "毛利率"
+        }
+        indicator_key = indicator_map.get(compare_indicator, compare_indicator)
+
         chart_col, slider_col = st.columns([5, 1])
-        # 滑條只要有圖就一直在旁邊、即時更新
         with slider_col:
             chart_width = st.slider("寬度", min_value=2.0, max_value=8.0, value=3.2, step=0.1, key="chart_width_multi")
             chart_height = st.slider("高度", min_value=1.0, max_value=5.0, value=2.0, step=0.1, key="chart_height_multi")
@@ -1055,23 +1064,37 @@ with tab3:
             for company in df["公司"].unique():
                 df_c = df[df["公司"] == company].sort_values("年度")
                 label = f"{company} ({df_c['來源'].iloc[0]})"
-                ax.plot(df_c["年度"], df_c[compare_indicator], marker="o", label=label)
-            if "%" in compare_indicator or compare_indicator in ["毛利率", "Gross Margin"]:
-                ax.set_ylabel(compare_indicator + ("（%）" if multi_lang == "繁體中文" else " (%)"))
+                ax.plot(df_c["年度"], df_c[indicator_key], marker="o", label=label)
+            # 標題/軸/圖例都用 prop
+            if prop:
+                if "%" in indicator_key or indicator_key in ["毛利率", "Gross Margin"]:
+                    ax.set_ylabel(indicator_key + ("（%）" if multi_lang == "繁體中文" else " (%)"), fontproperties=prop)
+                else:
+                    ax.set_ylabel(indicator_key + ("（億元）" if multi_lang == "繁體中文" else " (100M)"), fontproperties=prop)
+                ax.set_xlabel("年度" if multi_lang == "繁體中文" else "Year", fontproperties=prop)
+                ax.set_title(T["tab3_chart_title"].format(indicator=compare_indicator), fontsize=14, fontproperties=prop)
+                ax.legend(
+                    fontsize=8,
+                    bbox_to_anchor=(1.01, 0.5),
+                    loc='center left',
+                    borderaxespad=0.,
+                    prop=prop
+                )
             else:
-                ax.set_ylabel(compare_indicator + ("（億元）" if multi_lang == "繁體中文" else " (100M)"))
-            ax.set_xlabel("年度" if multi_lang == "繁體中文" else "Year")
-            ax.set_title(T["tab3_chart_title"].format(indicator=compare_indicator), fontsize=14)
-            # ==== legend 放圖外右側、字體縮小 ====
-            ax.legend(
-                fontsize=8,
-                bbox_to_anchor=(1.01, 0.5),
-                loc='center left',
-                borderaxespad=0.
-            )
+                if "%" in indicator_key or indicator_key in ["毛利率", "Gross Margin"]:
+                    ax.set_ylabel(indicator_key + ("（%）" if multi_lang == "繁體中文" else " (%)"))
+                else:
+                    ax.set_ylabel(indicator_key + ("（億元）" if multi_lang == "繁體中文" else " (100M)"))
+                ax.set_xlabel("年度" if multi_lang == "繁體中文" else "Year")
+                ax.set_title(T["tab3_chart_title"].format(indicator=compare_indicator), fontsize=14)
+                ax.legend(
+                    fontsize=8,
+                    bbox_to_anchor=(1.01, 0.5),
+                    loc='center left',
+                    borderaxespad=0.
+                )
             ax.grid(True)
             st.pyplot(fig, use_container_width=False)
             st.write(df)
     elif df is not None and df.empty:
         st.warning(T["tab3_multi_no_data"])
-

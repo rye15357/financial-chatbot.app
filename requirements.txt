@@ -12,3 +12,5 @@ streamlit
 sentence-transformers
 openai
 matplotlib
+pandas
+requests
