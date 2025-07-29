@@ -10,3 +10,4 @@ langchain-core>=0.1.22
 langchain-huggingface>=0.1.1
 streamlit
 sentence-transformers
+openai
