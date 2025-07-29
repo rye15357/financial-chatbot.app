@@ -30,13 +30,17 @@ token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 serper_api_key = os.getenv("SERPER_API_KEY")
 openai_api_key = os.getenv("OPENAI_API_KEY")
 
+def login_hf(token):
+    login(token=token)
+    return True
+
 if not token:
     st.error("請設定 HUGGINGFACEHUB_API_TOKEN")
     st.stop()
 if not openai_api_key:
     st.error("請設定 OPENAI_API_KEY")
     st.stop()
-login(token=token)
+login_hf(token)
 openai.api_key = openai_api_key
 
 # 路徑初始化
