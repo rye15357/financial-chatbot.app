@@ -21,8 +21,13 @@ import json
 import matplotlib.pyplot as plt
 import shutil
 
-plt.rcParams['font.sans-serif'] = ['Microsoft JhengHei'] # 微軟正黑體
-plt.rcParams['axes.unicode_minus'] = False  # 解決負號亂碼
+plt.rcParams['font.sans-serif'] = [
+    'Microsoft JhengHei',           # Windows
+    'Noto Sans CJK TC',             # Linux/Google Cloud, 很常見
+    'AR PL UMing TW',               # Ubuntu 也有
+    'sans-serif'                    # 其他預設
+]
+plt.rcParams['axes.unicode_minus'] = False
 
 # === .env & Token 初始化 ===
 load_dotenv()
