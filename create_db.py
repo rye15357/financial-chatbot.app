@@ -6,8 +6,14 @@ import json
 import argparse
 import hashlib
 import logging
-import pdfplumber
 from datetime import datetime
+
+try:
+    import pdfplumber
+except ImportError as e:
+    print("❌ 請先安裝 pdfplumber：pip install pdfplumber")
+    raise e
+
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -33,6 +39,7 @@ VECTORSTORE_DIR = os.path.join(BASE_DIR, 'vectorstore')
 PREVIEW_PATH = os.path.join(DATA_PATH, 'preview')
 TABLES_PATH = os.path.join(DATA_PATH, 'tables')
 CHUNKS_PATH = os.path.join(DATA_PATH, 'chunks')
+os.makedirs(DATA_PATH, exist_ok=True)
 os.makedirs(PREVIEW_PATH, exist_ok=True)
 os.makedirs(TABLES_PATH, exist_ok=True)
 os.makedirs(CHUNKS_PATH, exist_ok=True)
@@ -51,7 +58,6 @@ def safe_folder_name(company):
     ascii_name = re.sub(r"[^a-zA-Z0-9_]", "_", ascii_name)
     hash_part = hashlib.md5(company.encode("utf-8")).hexdigest()[:8]
     return f"{ascii_name.lower()}_{hash_part}"         # 唯一key，永遠一樣
-
 
 # ==== 同步 company_mapping.json ====
 def update_company_mapping(safe_folder, company_name):

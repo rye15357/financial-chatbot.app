@@ -16,6 +16,7 @@ import requests
 import pandas as pd
 import time 
 import hashlib
+import sys
 from lang_pack import LANG_PACK
 import json
 import matplotlib.pyplot as plt
@@ -627,7 +628,7 @@ else:
         with st.spinner("建構向量資料庫中...（請勿重新整理或操作，預計 10-30 秒）" if multi_lang=="繁體中文" else "Building vector DB... Please wait."):
             try:
                 result = subprocess.run(
-                    ["python", "create_db.py", "--pdf", pdf_path, "--company", company_name],
+                    [sys.executable, "create_db.py", "--pdf", pdf_path, "--company", company_name],
                     capture_output=True,
                     text=True,
                     check=False
