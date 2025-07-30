@@ -307,10 +307,8 @@ def extract_amount_by_type(text, query=""):
             results.append(f"{num}{unit}")
         except:
             continue
-    # 如果有多個，通常第一個就是
     if results:
         return results[0]
-    # 如果沒找到有單位的數字，可以保留你原本的萬用條件
     return None
 
 
