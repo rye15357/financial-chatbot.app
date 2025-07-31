@@ -560,6 +560,26 @@ def get_latest_company_status_from_sources(news_results):
     return "查無"
 
 
+def extract_main_financials(news_results, query):
+    rows = []
+    for src, content in news_results:
+        value = extract_twd_amount(content, query) or extract_amount_by_type(content, query)
+        if value:
+            rows.append((src, value))
+    if rows:
+        # 比較數字是否一致
+        values = set(val for src, val in rows)
+        tip = ""
+        if len(values) > 1:
+            tip = "⚠️ 不同來源數值有差異，請以官網或公開資訊觀測站為準。\n"
+        md = "| 來源 | 數值 |\n|---|---|\n"
+        md += "\n".join([f"| {src} | {val} |" for src, val in rows])
+        return tip + md
+    else:
+        return ""
+
+
+
 def integrated_ai_summary(user_input, DB_FAISS_PATH, multi_lang):
     # 1. 多來源搜尋
     news_results = multi_source_search(user_input)
@@ -567,9 +587,12 @@ def integrated_ai_summary(user_input, DB_FAISS_PATH, multi_lang):
     status_bar = ""
     if status_str == "已解散":
         status_bar = "🔴 **公司目前狀態：已解散／結束營業**\n\n"
-    elif status_str == "營業中":
-        status_bar = "🟢 **公司目前狀態：營業中**\n\n"
 
+    # 新增主動比對table
+    financials_md = extract_main_financials(news_results, user_input)
+    context_text = ""
+    if financials_md:
+        context_text += "#### 主要來源數據比較\n" + financials_md + "\n\n"
 
     # ========== 台灣公司網查無資料提醒 ==========
     tw_company_result = ""
@@ -593,7 +616,7 @@ def integrated_ai_summary(user_input, DB_FAISS_PATH, multi_lang):
     else:
         missing_company_msg = ""
 
-    context_text = ""
+    # 這裡不要重新宣告 context_text，應該直接 +=
     for src, content in news_results:
         context_text += f"[{src}] {content}\n"
 
@@ -628,6 +651,7 @@ def integrated_ai_summary(user_input, DB_FAISS_PATH, multi_lang):
         lang=multi_lang
     )
     return status_bar + ai_ans
+
 
 
 
@@ -841,7 +865,11 @@ model_options = ["Qwen1.8", "OpenAI GPT-4o"]
 selected_model = st.sidebar.selectbox(T["model_select"], model_options, key="model_select")
 
 st.sidebar.header(T["user_and_topic"])
-users = list_users()
+
+# 保證所有語言「新增用戶」只出現一次
+all_add_user_names = [v["add_user"] for v in LANG_PACK.values()] + ["+ 新增用戶", "+ Add User"]
+users = [u for u in list_users() if u not in all_add_user_names]
+
 if not users:
     user_id = st.sidebar.text_input(T["user_input"], value="guest", key="user_id_new")
     if st.sidebar.button(T["add_user"]):
@@ -850,7 +878,9 @@ if not users:
             st.success(f"{T['add_user']}：{user_id}")
             st.rerun()
 else:
-    user_options = users + [T["add_user"]]
+    user_options = users.copy()
+    if T["add_user"] not in user_options:
+        user_options.append(T["add_user"])  # 只加一次
     user_id = st.sidebar.selectbox("👤 " + T["user_label"], user_options, index=0, key="user_select")
 
     if user_id == T["add_user"]:
@@ -864,6 +894,7 @@ else:
                 st.warning(T["user_input"])
     else:
         st.session_state["user_id"] = user_id
+
 
 # ==== 📁 主題選擇 ====
 all_add_topic_names = [v["add_topic"] for v in LANG_PACK.values()] + ["+ 新增主題", "+ Add Topic"]
@@ -1143,6 +1174,13 @@ if "messages" not in st.session_state:
 
 # ========== 分頁1：AI問答 ==========
 
+# --- 分頁1訊息：主題切換時自動切換聊天紀錄 ---
+if "last_topic" not in st.session_state:
+    st.session_state["last_topic"] = topic
+if topic != st.session_state["last_topic"]:
+    st.session_state["messages_tab1"] = load_chat(user_id, topic)
+    st.session_state["last_topic"] = topic
+
 # 初始化分頁1的聊天紀錄
 if "messages_tab1" not in st.session_state:
     try:
@@ -1163,27 +1201,28 @@ with tab1:
         save_chat(st.session_state["messages_tab1"], user_id, topic)
         st.rerun()
 
+    # 聊天紀錄（依目前主題）
     for chat in st.session_state["messages_tab1"]:
         with st.chat_message(chat["role"]):
             st.markdown(chat["content"], unsafe_allow_html=True)
 
 user_input = st.chat_input(T["chat_input"], key="ai_chat")
 if user_input:
-    st.session_state["messages_tab1"].append({"role": "user", "content": user_input})
+    # 查詢中，只顯示本次 user_input & loading
     with st.chat_message("user"):
         st.markdown(user_input)
     with st.spinner("AI 正在查詢 ..." if multi_lang == "繁體中文" else "AI is searching ..."):
         try:
             reply = integrated_ai_summary(user_input, DB_FAISS_PATH, multi_lang)
-            # ==這裡原本有公司查核警語區塊，直接移除==
         except Exception as e:
             reply = f"❌ 查詢失敗：{e}" if multi_lang == "繁體中文" else f"❌ Error: {e}"
 
+    # 回覆結束後才 append 本次 user+assistant，這樣 loading 階段不會卡在前一輪
+    st.session_state["messages_tab1"].append({"role": "user", "content": user_input})
     st.session_state["messages_tab1"].append({"role": "assistant", "content": reply})
-    with st.chat_message("assistant"):
-        st.markdown(reply, unsafe_allow_html=True)
     save_chat(st.session_state["messages_tab1"], user_id, topic)
-    st.toast("已完成多來源查詢" if multi_lang == "繁體中文" else "Multi-source search complete", icon="🤖")
+    st.rerun()
+
 
 
 # ========== 分頁2：財報摘要 ==========
