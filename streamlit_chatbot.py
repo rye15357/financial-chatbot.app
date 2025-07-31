@@ -7,11 +7,13 @@ from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 from langchain_core.prompts import PromptTemplate
 from langchain_huggingface import HuggingFaceEmbeddings, HuggingFacePipeline
+from fuzzywuzzy import process
 from datetime import datetime
 import openai
 import torch
 import re
 import subprocess
+from bs4 import BeautifulSoup
 import requests
 import pandas as pd
 import time 
@@ -38,6 +40,7 @@ load_dotenv()
 token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 serper_api_key = os.getenv("SERPER_API_KEY")
 openai_api_key = os.getenv("OPENAI_API_KEY")
+newsapi_key = os.getenv("NEWSAPI_KEY")
 
 def login_hf(token):
     try:
@@ -84,26 +87,21 @@ company_mapping = load_company_mapping()  # { safe_folder: 中文名 }
 # ==== 聊天紀錄相關 ====
 
 def ask_openai(prompt, model="gpt-4o", temperature=0.7, lang="繁體中文", history=None):
-    # 強化 AI 分析師風格
+    # 動態多段落分組 system prompt
     if lang == "繁體中文":
         system_prompt = (
             "你是一位頂尖的財經產業分析師，專精台灣/全球上市櫃公司、半導體與AI產業。"
-            "針對用戶問題，請用以下結構回答：\n"
-            "1. 條列【關鍵數據】或【產業重點】\n"
-            "2. 條列【影響因素】或【趨勢/挑戰】\n"
-            "3. 最後給一段【專業觀點/投資建議】，務必明確、有深度。\n"
-            "如果資料不足，請明說『資訊有限』，並根據產業趨勢合理推估。"
-            "回覆務必嚴謹、專業，不要杜撰來源，不要用太口語的語氣。"
+            "請根據用戶問題與輸入資料，**自動分段落（每段有明確小標題+條列重點）**，"
+            "常見如：財務數據、業務亮點、趨勢、挑戰、展望、風險、投資觀點、產業背景...（依內容自動決定）"
+            "每段落標題可加 emoji，內容用條列清楚呈現，無資料時請直接說明。"
+            "回答格式請用 markdown，**不要有多餘寒暄或贅詞**。"
         )
     else:
         system_prompt = (
-            "You are a top financial and industry analyst, specializing in global and Taiwanese listed companies, semiconductors, and AI. "
-            "For any question, structure your answer as follows:\n"
-            "1. List [Key Figures] or [Industry Highlights]\n"
-            "2. List [Factors/Trends/Challenges]\n"
-            "3. Conclude with a clear [Analyst View/Investment Suggestion].\n"
-            "If data is limited, explicitly say so, and provide reasoned industry-based estimates. "
-            "Your tone should be precise and professional, avoid making up data, and do not be overly casual."
+            "You are a top financial/industry analyst. For each user question and data, "
+            "dynamically group your answer into multiple sections, each with a clear headline (optionally emoji) and bullet points. "
+            "Section topics may include: Financials, Highlights, Trends, Outlook, Risk, Analyst View, Background, etc. (decide based on context)."
+            "Output in markdown. No chit-chat. State 'No clear info' if unavailable."
         )
     messages = [{"role": "system", "content": system_prompt}]
     if history:
@@ -114,9 +112,10 @@ def ask_openai(prompt, model="gpt-4o", temperature=0.7, lang="繁體中文", his
         model=model,
         messages=messages,
         temperature=temperature,
-        max_tokens=1000
+        max_tokens=1200
     )
     return completion.choices[0].message.content.strip()
+
 
 
 def get_cached_summary_path(company):
@@ -319,6 +318,7 @@ def safe_folder_name(name):
     return f"{ascii_name.lower()}_{hash_part}"
 
 
+
 def get_company_year_data(companies, indicator, years):
     """
     查詢多家公司多年度單一指標（如營收/EPS）資料來源：Web > OpenAI > PDF
@@ -374,7 +374,7 @@ def get_company_year_data(companies, indicator, years):
                 continue
 
             # 3. 查 PDF（本地）
-            safe_names = [k for k, v in company_mapping.items() if v == company]
+            safe_names = [k for k, v in (company_mapping or {}).items() if v == company]
             if safe_names:
                 safe_name = safe_names[0]
                 DB_FAISS_PATH = os.path.join(VECTOR_DIR, safe_name, "db_faiss")
@@ -391,6 +391,345 @@ def get_company_year_data(companies, indicator, years):
                                 pass
     df = pd.DataFrame(rows)
     return df
+
+def extract_company_name(user_input, company_name_list):
+    # 直接命中
+    for name in sorted(company_name_list, key=len, reverse=True):
+        if name in user_input:
+            return name
+    # 股票代碼
+    code_to_name = {code: name for code, name in company_mapping.items()}
+    stock_code_match = re.search(r"\d{4}", user_input)
+    if stock_code_match and stock_code_match.group(0) in code_to_name:
+        return code_to_name[stock_code_match.group(0)]
+    # Fuzzy match
+    result = process.extractOne(user_input, company_name_list, score_cutoff=80)
+    if result:
+        match, score = result
+        return match
+    return None
+
+def goodinfo_web_search(query, max_len=500):
+    """
+    Goodinfo! 財報數據（僅支持股票代碼，如2330）
+    """
+    try:
+        stock_id = re.search(r"\d{4}", query)
+        if not stock_id:
+            return "請輸入股票代碼（如2330）"
+        code = stock_id.group(0)
+        url = f"https://goodinfo.tw/tw/StockFinDetail.asp?RPT_CAT=XX_M_QUAR_ACC&STOCK_ID={code}"
+        resp = requests.get(url, timeout=8, headers={"user-agent":"Mozilla/5.0"})
+        resp.encoding = "utf-8"
+        soup = BeautifulSoup(resp.text, "html.parser")
+        table = soup.find("table", class_="b1 p4_2 r0_10 row_mouse_over")
+        if not table:
+            return "查無財報"
+        text = table.get_text(separator="\n", strip=True)
+        return f"【Goodinfo!】\n{text[:max_len]}\n{url}"
+    except Exception as e:
+        return f"Goodinfo! 查詢失敗: {e}"
+
+
+def cnyes_web_search(query, max_len=600):
+    """
+    鉅亨網關鍵字爬蟲，只回傳第一筆新聞標題＋摘要＋連結
+    """
+    try:
+        url = f"https://search.cnyes.com/news/newslist?q={query}&t=keyword"
+        resp = requests.get(url, timeout=8, headers={"user-agent": "Mozilla/5.0"})
+        resp.encoding = "utf-8"
+        soup = BeautifulSoup(resp.text, "html.parser")
+        item = soup.select_one(".tabList .newsItem")
+        if not item:
+            return "查無新聞"
+        title_tag = item.select_one(".newsItem__title")
+        desc_tag = item.select_one(".newsItem__summury")
+        link_tag = item.select_one("a")
+        title = title_tag.text.strip() if title_tag else ""
+        desc = desc_tag.text.strip() if desc_tag else ""
+        link = "https://news.cnyes.com" + link_tag['href'] if link_tag else ""
+        return f"【鉅亨網】\n{title}\n{desc[:max_len]}\n{link}"
+    except Exception as e:
+        return f"鉅亨網查詢失敗: {e}"
+
+def twse_api_search(query):
+    """
+    證交所公開資訊觀測站 OpenAPI
+    官方說明：https://openapi.twse.com.tw/
+    """
+    try:
+        stock_id = re.search(r"\d{4}", query)
+        if not stock_id:
+            return "請輸入股票代碼（如2330）"
+        code = stock_id.group(0)
+        url = f"https://openapi.twse.com.tw/v1/opendata/t187ap03_L"
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        for item in data:
+            if item.get("公司代號") == code:
+                summary = "\n".join([f"{k}: {v}" for k, v in item.items()])
+                return f"【證交所 API】\n{summary}"
+        return "查無公開資訊"
+    except Exception as e:
+        return f"證交所 API 查詢失敗: {e}"
+
+
+def check_company_status_tw(company_name):
+    try:
+        url = f"https://www.tw-inc.com/company/search?q={company_name}"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        r = requests.get(url, headers=headers)
+        soup = BeautifulSoup(r.text, "html.parser")
+        result_block = soup.select_one(".company-list .item")
+        if not result_block:
+            return "查無資料", url
+        status_text = result_block.text
+        if "解散" in status_text or "撤銷" in status_text or "廢止" in status_text:
+            return "解散／已結束營業", url
+        elif "核准設立" in status_text or "營業中" in status_text:
+            return "營業中", url
+        else:
+            return "未知狀態", url
+    except Exception:
+        return "查無資料", ""
+
+
+
+def newsapi_search(query, api_key=None, max_len=500):
+    """
+    NewsAPI 國際新聞聚合查詢（需註冊取得 API KEY）
+    """
+    if not api_key:
+        return "請設定 NewsAPI API KEY"
+    try:
+        url = "https://newsapi.org/v2/everything"
+        params = {"q": query, "language": "zh", "apiKey": api_key, "pageSize": 1}
+        resp = requests.get(url, params=params, timeout=8)
+        data = resp.json()
+        if data.get("status") == "ok" and data.get("totalResults", 0) > 0:
+            article = data["articles"][0]
+            title = article["title"]
+            desc = article["description"] or ""
+            link = article["url"]
+            return f"【NewsAPI】\n{title}\n{desc[:max_len]}\n{link}"
+        return "查無新聞"
+    except Exception as e:
+        return f"NewsAPI 查詢失敗: {e}"
+
+
+def synthesize_answers(query, search_results, lang="繁體中文"):
+    prompt = (
+        "請根據以下兩個來源資料，幫我條列彙整重點並總結結論（不用附網址）：\n\n"
+        if lang == "繁體中文" else
+        "Based on the following two sources, summarize key points and provide a conclusion (no links):\n\n"
+    )
+    for src, content in search_results:
+        prompt += f"【{src}】\n{content}\n\n"
+    prompt += "請強調關鍵數據與不同觀點，最後用你自己的專業語氣總結。"
+    return ask_openai(prompt, lang=lang)
+
+
+def extract_status_from_text(text):
+    # 解散關鍵字
+    if any(k in text for k in ["解散", "歇業", "撤銷", "結束營業", "廢止", "已不存在", "已下市"]):
+        return "已解散"
+    # 營業中關鍵字
+    if any(k in text for k in ["營業中", "核准設立", "現存", "存續", "上市", "上櫃", "登記設立"]):
+        return "營業中"
+    # 台灣公司網有公司資訊
+    if "統編" in text and ("有限公司" in text or "股份有限公司" in text or "公司" in text):
+        return "營業中"
+    # 有公司地址、負責人
+    if any(k in text for k in ["負責人", "地址", "設立"]):
+        return "營業中"
+    return "查無"
+
+
+def get_latest_company_status_from_sources(news_results):
+    # 遍歷多個來源回傳的內容，自動判斷公司狀態
+    status_list = []
+    for src, content in news_results:
+        status = extract_status_from_text(content)
+        status_list.append(status)
+    # 優先已解散，其次營業中
+    if "已解散" in status_list:
+        return "已解散"
+    if "營業中" in status_list:
+        return "營業中"
+    return "查無"
+
+
+def integrated_ai_summary(user_input, DB_FAISS_PATH, multi_lang):
+    # 1. 多來源搜尋
+    news_results = multi_source_search(user_input)
+    status_str = get_latest_company_status_from_sources(news_results)
+    status_bar = ""
+    if status_str == "已解散":
+        status_bar = "🔴 **公司目前狀態：已解散／結束營業**\n\n"
+    elif status_str == "營業中":
+        status_bar = "🟢 **公司目前狀態：營業中**\n\n"
+
+
+    # ========== 台灣公司網查無資料提醒 ==========
+    tw_company_result = ""
+    for src, content in news_results:
+        if src == "台灣公司網":
+            tw_company_result = content
+            break
+    # 擴充判斷條件
+    no_company_info = (
+        "查無公司資料" in tw_company_result or
+        "查無資料" in tw_company_result or
+        "公司不存在" in tw_company_result or
+        "找不到該公司" in tw_company_result
+    )
+    if no_company_info:
+        missing_company_msg = (
+            "⚠️ 找不到該公司營運資訊，可能已歇業、解散、撤銷、改名或資料已下架。請確認公司名稱正確。\n\n"
+            if multi_lang == "繁體中文"
+            else "⚠️ Company information not found; it may be dissolved, revoked, renamed, or removed. Please check the company name.\n\n"
+        )
+    else:
+        missing_company_msg = ""
+
+    context_text = ""
+    for src, content in news_results:
+        context_text += f"[{src}] {content}\n"
+
+    # 2. PDF 本地財報
+    pdf_summary = ""
+    if DB_FAISS_PATH and os.path.exists(DB_FAISS_PATH):
+        qa = get_qa_bot(DB_FAISS_PATH, multi_lang)
+        if qa:
+            result = qa.invoke({"query": user_input})
+            if isinstance(result, dict):
+                pdf_summary = result.get("result") or result.get("output_text") or ""
+            else:
+                pdf_summary = result if isinstance(result, str) else str(result)
+    if pdf_summary:
+        context_text += f"[PDF 財報] {pdf_summary}\n"
+
+    # 3. 丟給 AI，自動分段 + 小標 + 條列，無資料說明
+    prompt = (
+        f"{missing_company_msg}" + 
+        (
+            "請根據所有以下資料，自動分段回答（每段有明確小標題+條列重點），"
+            "段落數與標題內容請根據問題動態決定，可包含：數據重點、亮點、趨勢、風險、比較、展望、總結等，"
+            "無資料時請說明，全部用 markdown 格式，不要有寒暄。"
+            if multi_lang == "繁體中文" else
+            "Based on ALL the following sources, auto-group answer into multiple sections (each with a headline & bullet points). "
+            "Section count and topics depend on the question, can include: data, highlights, trends, risks, comparison, outlook, summary, etc. "
+            "Say 'No clear data' if nothing found. Output markdown only."
+        )
+    )
+    ai_ans = ask_openai(
+        f"{prompt}\n\n用戶問題：{user_input}\n\n{context_text}",
+        lang=multi_lang
+    )
+    return status_bar + ai_ans
+
+
+
+def multi_source_search(query):
+    results = []
+    # 1. Google
+    results.append(("Google", web_search(query)))
+    # 2. Yahoo財經
+    results.append(("Yahoo財經", yahoo_finance_web_search(query)))
+    # 3. 台灣公司網
+    results.append(("台灣公司網", taiwan_company_web_search(query)))
+    # 4. 公開資訊觀測站 (MOPS)
+    results.append(("公開資訊觀測站", mops_web_search(query)))
+    # 5. 鉅亨網
+    results.append(("鉅亨網", cnyes_web_search(query)))
+    # 6. Goodinfo!
+    results.append(("Goodinfo!", goodinfo_web_search(query)))
+    # 7. 證交所 API
+    results.append(("證交所 API", twse_api_search(query)))
+    # 8. NewsAPI 
+    newsapi_key = os.getenv("NEWSAPI_KEY")
+    if newsapi_key:
+        results.append(("NewsAPI", newsapi_search(query, api_key=newsapi_key)))
+    else:
+        results.append(("NewsAPI", "未設定 API KEY"))
+    return results
+
+
+def yahoo_finance_web_search(query, max_len=600):
+    """
+    查詢 Yahoo 財經台灣（tw.stock.yahoo.com），抓公司簡易財報（營收、EPS、淨利等）。
+    傳入公司名稱或股票代碼皆可。
+    """
+    try:
+        # 嘗試從 query 抓出公司股票代碼（如2330）
+        stock_id = re.search(r"\d{4}", query)
+        if stock_id:
+            stock_code = stock_id.group(0)
+        else:
+            # 如果只給公司名要轉股票代碼，可用字典 mapping 或用公開資訊觀測站/台灣公司網補查
+            return "請輸入股票代碼或公司名稱"
+
+        url = f"https://tw.stock.yahoo.com/quote/{stock_code}/financial"
+        resp = requests.get(url, timeout=8, headers={"user-agent":"Mozilla/5.0"})
+        resp.encoding = "utf-8"
+        soup = BeautifulSoup(resp.text, "html.parser")
+        # 抓財報表格
+        table = soup.find("table")
+        if not table:
+            return "查無財報資料"
+        text = table.get_text(separator="\n", strip=True)
+        return f"【Yahoo財經】\n{text[:max_len]}\n{url}"
+    except Exception as e:
+        return f"Yahoo財經查詢失敗: {e}"
+
+
+def mops_web_search(query, max_len=600):
+    """
+    用公開資訊觀測站（MOPS）查公司基本資料、重大訊息
+    """
+    try:
+        # 這裡舉例用公開資訊觀測站公司查詢頁面
+        search_url = f"https://mops.twse.com.tw/mops/web/t05st01"
+        params = {
+            "TYPEK": "all",
+            "firstin": "true",
+            "co_id": "",      
+            "keyword": query, 
+        }
+        # 直接查關鍵字其實有限制，建議可用台灣證券公司代碼對照表輔助
+        resp = requests.get(search_url, params=params, timeout=10)
+        resp.encoding = "utf-8"
+        soup = BeautifulSoup(resp.text, "html.parser")
+        table = soup.find("table", {"class": "hasBorder"})
+        if not table:
+            return "查無公司資料"
+        text = table.get_text(separator="\n", strip=True)
+        return f"【公開資訊觀測站】\n{text[:max_len]}\n{search_url}"
+    except Exception as e:
+        return f"公開資訊觀測站查詢失敗: {e}"
+
+
+def taiwan_company_web_search(query, max_len=500):
+    """爬取台灣公司網（twincn.com）關鍵公司資訊"""
+    try:
+        url = f"https://www.twincn.com/search?q={query}"
+        resp = requests.get(url, timeout=8)
+        resp.encoding = "utf-8"
+        soup = BeautifulSoup(resp.text, "html.parser")
+        link_tag = soup.select_one("div.r-list > a")
+        if not link_tag:
+            return "查無公司資料"
+        company_url = "https://www.twincn.com" + link_tag['href']
+        company_resp = requests.get(company_url, timeout=8)
+        company_resp.encoding = "utf-8"
+        company_soup = BeautifulSoup(company_resp.text, "html.parser")
+        summary_div = company_soup.select_one("div.r-info")
+        summary_text = summary_div.get_text(separator="\n", strip=True) if summary_div else ""
+        return f"【台灣公司網】\n{summary_text[:max_len]}\n{company_url}"
+    except Exception as e:
+        return f"台灣公司網查詢失敗: {e}"
+
 
 def web_search(query, retry=2):
     url = "https://google.serper.dev/search"
@@ -581,7 +920,7 @@ else:
 # 刪除主題（兩階段）
 
 delete_topic_key = f"delete_topic_confirm_{topic}"
-if topic != T["add_topic"]:  # ✅ 排除新增主題選項
+if topic != T["add_topic"]:  # 排除新增主題選項
     if st.sidebar.button(f"{T['delete_topic']} [{topic}]", key=f"delete_topic_btn_{topic}"):
         st.session_state[delete_topic_key] = True
     if st.session_state.get(delete_topic_key, False):
@@ -601,7 +940,6 @@ if topic != T["add_topic"]:  # ✅ 排除新增主題選項
 
 
 # Sidebar: 公司+PDF
-# 放在所有 sidebar 輸入元件之前
 if st.session_state.get("after_build_db"):
     st.session_state["sidebar_company_input"] = ""
     st.session_state["sidebar_pdf_uploader"] = None
@@ -655,9 +993,8 @@ else:
                 st.error(f"❌ 建庫執行失敗：{e}" if multi_lang=="繁體中文" else f"❌ Build process failed: {e}")
 
 
-
-companies = get_companies_list()  # ['___23bc3472', '___0b8f314d']
-company_mapping = load_company_mapping()  # {'___23bc3472': '鴻海', ...}
+companies = get_companies_list()  
+company_mapping = load_company_mapping() 
 
 # 用 mapping 取得所有顯示用中文名（若無就用 safe_name）
 display_names = [company_mapping.get(code, code) for code in companies]
@@ -671,11 +1008,13 @@ print("display_names =", display_names)
 # 根據 session_state 設定預設 index
 selected_safe_name = st.session_state.get("company_selected", None)
 if selected_safe_name and selected_safe_name in companies:
-    # 先取得中文名
     selected_display_name = company_mapping.get(selected_safe_name, selected_safe_name)
+else:
+    selected_display_name = None
+
+if selected_display_name and selected_display_name in display_names:
     selected_index = display_names.index(selected_display_name) + 1
 else:
-    selected_display_name = None  
     selected_index = 0
 
 # 這裡 sidebar 下拉，顯示的只有公司中文名
@@ -833,119 +1172,18 @@ if user_input:
     st.session_state["messages_tab1"].append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
-    with st.spinner("AI 正在查詢資料..." if multi_lang == "繁體中文" else "AI is searching..."):
+    with st.spinner("AI 正在查詢 ..." if multi_lang == "繁體中文" else "AI is searching ..."):
         try:
-            if selected_model == "Qwen1.8":
-                answer = ""
-                amount = "（查無）" if multi_lang == "繁體中文" else "(No data)"
-                growth = "（查無）" if multi_lang == "繁體中文" else "(No data)"
-                source_snippets = []
-                news_list = []
-                used_pdf = False
-                if DB_FAISS_PATH and os.path.exists(DB_FAISS_PATH):
-                    qa = get_qa_bot(DB_FAISS_PATH, multi_lang)
-                    if qa:
-                        result = qa.invoke({"query": user_input})
-                        if isinstance(result, dict):
-                            answer = result.get("result") or result.get("output_text") or ""
-                            source_documents = result.get("source_documents", [])
-                        else:
-                            answer = result if isinstance(result, str) else str(result)
-                            source_documents = []
-                        amount = extract_amount_by_type(answer, user_input)
-                        if not amount and source_documents:
-                            for doc in source_documents:
-                                amount = extract_amount_by_type(doc.page_content, user_input)
-                                if amount:
-                                    break
-                        def extract_growth(text):
-                            match = re.search(r"(年增率|年成長率)[\s:：]*([\-0-9\.]+%)", text)
-                            return match.group(2) if match else None
-                        growth = extract_growth(answer)
-                        if not growth and source_documents:
-                            for doc in source_documents:
-                                growth = extract_growth(doc.page_content)
-                                if growth:
-                                    break
-                        if amount:
-                            used_pdf = True
-                            source_snippets = []
-                            for doc in source_documents[:3]:
-                                snippet = doc.page_content.strip()
-                                if len(snippet) > 80:
-                                    snippet = snippet[:80] + "..."
-                                source_snippets.append(snippet)
-
-                # 沒查到 PDF 金額 → 自動補網路
-                if not used_pdf:
-                    st.info("❗️未在財報PDF中擷取到關鍵金額，已自動補上網路資料" if multi_lang == "繁體中文" else "❗️Not found in PDF, using web data")
-                    news_result = web_search(user_input)
-                    amount, news_list, source_snippets = parse_web_search_result(news_result, user_input)
-                    answer = "（來自網路）" if multi_lang == "繁體中文" else "(From web)"
-                    growth = "（查無）" if multi_lang == "繁體中文" else "(No data)"
-
-                def extract_company_from_question(question):
-                    known_companies = ["台積電", "鴻海", "聯發科", "聯電", "大立光", "日月光"]
-                    for c in known_companies:
-                        if c in question:
-                            return c
-                    return company_selected or ("（自動判斷公司）" if multi_lang == "繁體中文" else "(Auto company detect)")
-                company_name = extract_company_from_question(user_input)
-
-                reply = build_ai_reply(
-                    company_mapping.get(company_name, company_name),  # 顯示用中文名
-                    user_input,
-                    answer,
-                    amount or ("（查無）" if multi_lang == "繁體中文" else "(No data)"),
-                    growth or ("（查無）" if multi_lang == "繁體中文" else "(No data)"),
-                    news_list,
-                    source_snippets,
-                    T
-                )
-
-            elif selected_model == "OpenAI GPT-4o":
-                # ==== 改：永遠優先網路抓數字，抓到就直接用 ====
-                news_result = web_search(user_input)
-                amount, news_list, source_snippets = parse_web_search_result(news_result, user_input)
-
-                if amount and amount not in ["（查無）", "(No data)"]:
-                    # 如果有數字 → 直接顯示網路數字與來源（可選GPT輔助摘要）
-                    gpt_summary = ask_openai(
-                        f"根據以下最新公開資訊，請條列本季財報重點、趨勢與專業觀點：\n\n{news_result}",
-                        lang=multi_lang,
-                        history=[]
-                    )
-                    reply = f"""🌐 **網路最新數字：**  
-- **{amount}**
-
-{news_result}
-
----
-
-**AI 分析補充：**
-{gpt_summary}
-"""
-                else:
-                    # 沒抓到網路數字才用GPT
-                    history_msgs = []
-                    for m in st.session_state["messages_tab1"]:
-                        if m["role"] in ("user", "assistant"):
-                            content = m["content"]
-                            if len(content) > 1500:
-                                content = content[:1500] + "..."
-                            history_msgs.append({"role": m["role"], "content": content})
-                    answer = ask_openai(user_input, lang=multi_lang, history=history_msgs)
-                    reply = f"🌐 **OpenAI GPT 回覆：**\n\n{answer}" if multi_lang == "繁體中文" else f"🌐 **OpenAI GPT Answer:**\n\n{answer}"
-
-            else:
-                reply = "請選擇有效的模型。" if multi_lang == "繁體中文" else "Please select a valid model."
+            reply = integrated_ai_summary(user_input, DB_FAISS_PATH, multi_lang)
+            # ==這裡原本有公司查核警語區塊，直接移除==
         except Exception as e:
-            reply = f"❌ 問答過程發生錯誤：{e}" if multi_lang == "繁體中文" else f"❌ Error occurred: {e}"
+            reply = f"❌ 查詢失敗：{e}" if multi_lang == "繁體中文" else f"❌ Error: {e}"
+
     st.session_state["messages_tab1"].append({"role": "assistant", "content": reply})
     with st.chat_message("assistant"):
         st.markdown(reply, unsafe_allow_html=True)
     save_chat(st.session_state["messages_tab1"], user_id, topic)
-    st.toast("已完成回答" if multi_lang == "繁體中文" else "Answer complete", icon="🤖")
+    st.toast("已完成多來源查詢" if multi_lang == "繁體中文" else "Multi-source search complete", icon="🤖")
 
 
 # ========== 分頁2：財報摘要 ==========
