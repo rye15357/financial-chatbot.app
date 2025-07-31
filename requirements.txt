@@ -16,3 +16,4 @@ pandas
 requests
 fuzzywuzzy
 python-Levenshtein
+beautifulsoup4
