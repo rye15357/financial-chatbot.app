@@ -87,43 +87,22 @@ company_mapping = load_company_mapping()  # { safe_folder: 中文名 }
 # ==== 聊天紀錄相關 ====
 
 def ask_openai(prompt, model="gpt-4o", temperature=0.7, lang="繁體中文", history=None):
-    # 根據語言自動切 prompt
+    # 動態多段落分組 system prompt
     if lang == "繁體中文":
-        system_prompt = """
-你是一名專業的財經產業分析師，擅長根據「用戶問題」與「整合資料」進行專業回覆。
-請根據下列規則作答：
-
-1. **根據問題重點動態決定段落數與內容**：
-   - 問「集團/公司全貌」時，請自動分段介紹「公司/集團簡介」、「主要事業群」、「關鍵財務數據」、「近年重大事件」、「展望與建議」。
-   - 問「特定子公司/事業部門/單一主題」時，請聚焦該主題，分段落說明背景、財務、趨勢、風險與建議。
-   - 問「最新事件」、「財務風險」等，請重點說明事件經過、涉及金額、影響分析與專業建議。
-
-2. **每一段要有明確小標題，可加 emoji，小標題後面條列重點。**
-3. **無明確資料時，請說明查無資料或僅有趨勢研判。**
-4. **全程以 markdown 格式作答，請不要有寒暄詞，不要加入多餘贅詞。**
-
-範例（根據問題自動變化段落）：
-- 問「威京集團財務狀況」→ 分析集團全貌、各事業群、財務數字、近期風險、總結
-- 問「威京集團地產部門流動性風險」→ 聚焦地產部門、流動性現況、相關事件、預警與建議
-
-務必根據「問題內容」自動組合回覆架構。
-"""
+        system_prompt = (
+            "你是一位頂尖的財經產業分析師，專精台灣/全球上市櫃公司、半導體與AI產業。"
+            "請根據用戶問題與輸入資料，**自動分段落（每段有明確小標題+條列重點）**，"
+            "常見如：財務數據、業務亮點、趨勢、挑戰、展望、風險、投資觀點、產業背景...（依內容自動決定）"
+            "每段落標題可加 emoji，內容用條列清楚呈現，無資料時請直接說明。"
+            "回答格式請用 markdown，**不要有多餘寒暄或贅詞**。"
+        )
     else:
-        system_prompt = """
-You are a professional financial industry analyst. Please answer based on the user's question and the integrated data:
-1. **Dynamically decide the number and content of sections based on the key point of the question**:
-   - For "group/company overview" questions, introduce company/group intro, main business units, key financials, major recent events, outlook & advice.
-   - For "specific subsidiary/business/theme", focus on that, explain background, finance, trends, risk & suggestion.
-   - For "latest events/financial risk", focus on the event, involved amounts, impact analysis & professional suggestions.
-2. **Each section must have a clear headline (with emoji is OK) and bulleted highlights.**
-3. **If no clear data, state it or provide only trend judgement.**
-4. **Strictly use markdown, no chit-chat or unnecessary wording.**
-Examples:
-- "Winking Group financial status" → analyze group overview, business units, numbers, risks, summary.
-- "Winking Group real estate division liquidity risk" → focus on RE division, liquidity, relevant events, alert & suggestions.
-Always dynamically organize the structure based on the user question.
-"""
-    # 接下來是你原本的 ask_openai code
+        system_prompt = (
+            "You are a top financial/industry analyst. For each user question and data, "
+            "dynamically group your answer into multiple sections, each with a clear headline (optionally emoji) and bullet points. "
+            "Section topics may include: Financials, Highlights, Trends, Outlook, Risk, Analyst View, Background, etc. (decide based on context)."
+            "Output in markdown. No chit-chat. State 'No clear info' if unavailable."
+        )
     messages = [{"role": "system", "content": system_prompt}]
     if history:
         messages.extend(history)
@@ -136,8 +115,6 @@ Always dynamically organize the structure based on the user question.
         max_tokens=1200
     )
     return completion.choices[0].message.content.strip()
-
-
 
 
 
@@ -603,7 +580,7 @@ def extract_main_financials(news_results, query):
 
 
 
-def integrated_ai_summary(user_input, DB_FAISS_PATH, multi_lang, history=None):
+def integrated_ai_summary(user_input, DB_FAISS_PATH, multi_lang):
     # 1. 多來源搜尋
     news_results = multi_source_search(user_input)
     status_str = get_latest_company_status_from_sources(news_results)
@@ -671,8 +648,7 @@ def integrated_ai_summary(user_input, DB_FAISS_PATH, multi_lang, history=None):
     )
     ai_ans = ask_openai(
         f"{prompt}\n\n用戶問題：{user_input}\n\n{context_text}",
-        lang=multi_lang,
-        history=history
+        lang=multi_lang
     )
     return status_bar + ai_ans
 
@@ -1230,32 +1206,22 @@ with tab1:
         with st.chat_message(chat["role"]):
             st.markdown(chat["content"], unsafe_allow_html=True)
 
-# ==== 主要問答區：user 輸入、AI 回答 ====
 user_input = st.chat_input(T["chat_input"], key="ai_chat")
 if user_input:
-    # 準備歷史紀錄，最多只保留最近 6~10 則
-    history_msgs = []
-    for m in st.session_state["messages_tab1"]:
-        history_msgs.append({"role": m["role"], "content": m["content"]})
-    max_hist = 6
-    if len(history_msgs) > max_hist:
-        history_msgs = history_msgs[-max_hist:]
-
+    # 查詢中，只顯示本次 user_input & loading
     with st.chat_message("user"):
         st.markdown(user_input)
     with st.spinner("AI 正在查詢 ..." if multi_lang == "繁體中文" else "AI is searching ..."):
         try:
-            # 這裡重點：把 history 丟進去
-            reply = integrated_ai_summary(user_input, DB_FAISS_PATH, multi_lang, history=history_msgs)
+            reply = integrated_ai_summary(user_input, DB_FAISS_PATH, multi_lang)
         except Exception as e:
             reply = f"❌ 查詢失敗：{e}" if multi_lang == "繁體中文" else f"❌ Error: {e}"
 
+    # 回覆結束後才 append 本次 user+assistant，這樣 loading 階段不會卡在前一輪
     st.session_state["messages_tab1"].append({"role": "user", "content": user_input})
     st.session_state["messages_tab1"].append({"role": "assistant", "content": reply})
     save_chat(st.session_state["messages_tab1"], user_id, topic)
     st.rerun()
-
-
 
 
 
@@ -1325,6 +1291,7 @@ with tab2:
                     st.markdown(f"理由：<span style='color:deepskyblue;font-weight:bold'>{reason}</span>", unsafe_allow_html=True)
                 if score:
                     st.markdown(f"信心分數：<span style='color:green;font-weight:bold'>{score} / 5</span>", unsafe_allow_html=True)
+
 
 with tab3:
     st.title(T["tab3"])
